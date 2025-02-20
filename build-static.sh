@@ -11,7 +11,7 @@ fi
 arch="$(uname -m)"
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 # FIXME: re-enable PHP errors when SPC will be compatible with PHP 8.4
-spcCommand="php -ddisplay_errors=Off ./bin/spc"
+spcCommand="./bin/spc-gnu-docker"
 md5binary="md5sum"
 if [ "${os}" = "darwin" ]; then
 	os="mac"
@@ -101,9 +101,12 @@ else
 	if [ -d "static-php-cli/" ]; then
 		cd static-php-cli/
 		git pull
+		git checkout feat/gnu-static
+		git apply ../../spc.patch
 	else
-		git clone --depth 1 https://github.com/crazywhalecc/static-php-cli
+		git clone --depth 1 https://github.com/crazywhalecc/static-php-cli --branch="feat/gnu-static"
 		cd static-php-cli/
+		git apply ../../spc.patch
 	fi
 
 	if type "brew" >/dev/null 2>&1; then
@@ -133,10 +136,25 @@ else
 		extraOpts="${extraOpts} --no-strip"
 	fi
 
-	${spcCommand} doctor --auto-fix
+	cat << 'EOF' > config/env.custom.ini
+[global]
+SPC_SKIP_DOCTOR_CHECK_ITEMS="if musl-wrapper is installed,if musl-cross-make is installed"
+
+[linux]
+CC=gcc
+CXX=g++
+AR=ar
+LD=ld
+SPC_DEFAULT_C_FLAGS=-fPIC
+SPC_NO_MUSL_PATH=yes
+SPC_CMD_VAR_PHP_MAKE_EXTRA_LDFLAGS_PROGRAM="-Wl,-O1 -pie"
+SPC_CMD_VAR_PHP_MAKE_EXTRA_LIBS="-ldl -lpthread -lm -lresolv -lutil"
+EOF
+
+	#${spcCommand} doctor --auto-fix
 	${spcCommand} download --with-php="${PHP_VERSION}" --for-extensions="${PHP_EXTENSIONS}" --for-libs="${PHP_EXTENSION_LIBS}" --ignore-cache-sources=php-src --prefer-pre-built
 	# shellcheck disable=SC2086
-	${spcCommand} build --debug --enable-zts --build-embed ${extraOpts} "${PHP_EXTENSIONS}" --with-libs="${PHP_EXTENSION_LIBS}"
+	${spcCommand} build --debug --enable-zts --build-embed ${extraOpts} "${PHP_EXTENSIONS}" --with-libs="${PHP_EXTENSION_LIBS}" --libc=glibc
 fi
 
 if ! type "go" >/dev/null 2>&1; then

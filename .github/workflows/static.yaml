@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - build-static-linux
     paths-ignore:
       - "docs/**"
   push:
@@ -269,3 +270,59 @@ jobs:
           "${BINARY}" list-modules | grep http.handlers.vulcain
         env:
           BINARY: dist/frankenphp-mac-${{ matrix.platform }}
+  build-linux-raw:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["x86_64"]
+    name: Build Linux ${{ matrix.platform }} binaries without Docker
+    runs-on: 'ubuntu-latest'
+    needs: [prepare]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: |
+            go.sum 
+            caddy/go.sum
+      - name: Set FRANKENPHP_VERSION
+        run: |
+          if [ "${GITHUB_REF_TYPE}" == "tag" ]; then
+            export FRANKENPHP_VERSION=${GITHUB_REF_NAME:1}
+          elif [ "${GITHUB_EVENT_NAME}" == "schedule" ]; then
+            export FRANKENPHP_VERSION="${{ needs.prepare.outputs.ref }}"
+          else
+            export FRANKENPHP_VERSION=${GITHUB_SHA}
+          fi
+
+          echo "FRANKENPHP_VERSION=${FRANKENPHP_VERSION}" >> "${GITHUB_ENV}"
+      - name: Build FrankenPHP
+        run: ./build-static.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #RELEASE: ${{ (needs.prepare.outputs.ref || github.ref_type == 'tag') && '1' || '' }}
+          NO_COMPRESS: ${{ github.event_name == 'pull_request' && '1' || '' }}
+      - if: needs.prepare.outputs.ref || github.ref_type == 'tag'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ github.workspace }}/dist/frankenphp-linux-without-docker-${{ matrix.platform }}-*
+      - name: Upload artifact
+        if: github.ref_type == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frankenphp-linux-without-docker-${{ matrix.platform }}
+          path: dist/frankenphp-linux-without-docker-${{ matrix.platform }}
+      - name: Run sanity checks
+        run: |
+          "${BINARY}" version
+          "${BINARY}" list-modules | grep frankenphp
+          "${BINARY}" list-modules | grep http.encoders.br
+          "${BINARY}" list-modules | grep http.handlers.mercure
+          "${BINARY}" list-modules | grep http.handlers.mercure
+          "${BINARY}" list-modules | grep http.handlers.vulcain
+        env:
+          BINARY: dist/frankenphp-linux-without-docker-${{ matrix.platform }}
+        
