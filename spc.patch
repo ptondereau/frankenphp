@@ -1,0 +1,15 @@
+diff --git a/bin/spc-gnu-docker b/bin/spc-gnu-docker
+index 362242b..7f87478 100755
+--- a/bin/spc-gnu-docker
++++ b/bin/spc-gnu-docker
+@@ -57,7 +57,9 @@ RUN sed -i 's/mirror.centos.org/vault.centos.org/g' /etc/yum.repos.d/*.repo && \
+     sed -i 's/^mirrorlist=http/#mirrorlist=http/g' /etc/yum.repos.d/*.repo
+ RUN yum clean all && \
+     yum makecache && \
+-    yum update -y
++    yum update -y && \
++    yum install -y libtool yum install gcc gcc-c++ && \
++    gcc --version
+ 
+ RUN curl -o cmake.tgz -fsSL https://github.com/Kitware/CMake/releases/download/v3.31.4/cmake-3.31.4-linux-$BASE_ARCH.tar.gz && \
+     mkdir /cmake && \
